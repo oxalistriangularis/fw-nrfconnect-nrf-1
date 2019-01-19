@@ -49,6 +49,8 @@ static const char power_off[] = "AT+CFUN=0";
 static const char normal[] = "AT+CFUN=1";
 /* Set the modem to Offline mode */
 static const char offline[] = "AT+CFUN=4";
+static const char read_msisdn_cmd[] = "AT+CNUM";
+static const char read_imei_cmd[] = "AT+CGSN";
 /* Successful return from modem */
 static const char success[] = "OK";
 /* Accepted network statuses read from modem */
@@ -56,6 +58,9 @@ static const char status1[] = "+CEREG: 1";
 static const char status2[] = "+CEREG:1";
 static const char status3[] = "+CEREG: 5";
 static const char status4[] = "+CEREG:5";
+
+char msisdn[64];
+char imei[64];
 
 static int at_cmd(int fd, const char *cmd, size_t size)
 {
@@ -79,6 +84,71 @@ static int at_cmd(int fd, const char *cmd, size_t size)
 	return 0;
 }
 
+
+static int read_imei(int fd)
+{
+	int len;
+	u8_t buffer[LC_MAX_READ_LENGTH];
+
+	LOG_DBG("send: %s", read_imei_cmd);
+	len = send(fd, read_imei_cmd, strlen(read_imei_cmd), 0);
+	if (len != strlen(read_imei_cmd)) {
+		LOG_ERR("send: failed");
+		return -EIO;
+	}
+
+    memset(imei, 0, 64);
+	len = recv(fd, buffer, LC_MAX_READ_LENGTH, 0);
+	if (len >= 15) {
+		LOG_ERR("recv: %s", buffer);
+	    
+	    memcpy(imei, buffer, 15);
+		return -EIO;
+	}
+
+	return 0;
+}
+
+
+
+static int read_msisdn(int fd)
+{
+	int len;
+	u8_t buffer[LC_MAX_READ_LENGTH];
+
+	LOG_DBG("send: %s", read_msisdn_cmd);
+	len = send(fd, read_msisdn_cmd, strlen(read_msisdn_cmd), 0);
+	if (len != strlen(read_msisdn_cmd)) {
+		LOG_ERR("send: failed");
+		return -EIO;
+	}
+
+	memset(msisdn, 0, 64);
+
+	len = recv(fd, buffer, LC_MAX_READ_LENGTH, 0);
+	printk("MSIDNS response: %s", buffer);
+	if (len >= 15) {
+		LOG_ERR("recv: %s", buffer);
+		char * p_num = strstr(buffer, "\"");
+
+		
+		if (p_num) {
+			if (p_num[1] == '+')
+			{
+				p_num+= 2;
+			}
+			char * p_end;
+			p_end = strstr(p_num+2, "\"");
+			int length = p_end - p_num - 1;
+	        memcpy(msisdn, p_num+1, length);
+	    }
+		return -EIO;
+	}
+
+	return 0;
+}
+
+
 static int w_lte_lc_init_and_connect(struct device *unused)
 {
 	int err;
@@ -90,6 +160,7 @@ static int w_lte_lc_init_and_connect(struct device *unused)
 	if (at_socket_fd == -1) {
 		return -EFAULT;
 	}
+	
 
 #if defined(CONFIG_LTE_EDRX_REQ)
 	/* Request configured eDRX settings to save power */
@@ -135,6 +206,13 @@ static int w_lte_lc_init_and_connect(struct device *unused)
 			}
 		}
 	}
+
+	read_msisdn(at_socket_fd);
+
+	read_imei(at_socket_fd);
+
+	printk("IMEI: %s\r\n", imei);
+	printk("MSISDN: %s\r\n", msisdn);
 
 	close(at_socket_fd);
 	return 0;

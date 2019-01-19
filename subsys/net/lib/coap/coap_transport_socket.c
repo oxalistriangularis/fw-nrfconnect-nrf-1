@@ -15,6 +15,7 @@ LOG_MODULE_REGISTER(coap_transport);
 
 #include <net/coap_api.h>
 #include <net/coap_transport.h>
+#include "nrf_socket.h"
 
 #include "coap.h"
 
@@ -24,6 +25,8 @@ LOG_MODULE_REGISTER(coap_transport);
 
 /** Maximum sockets that can be managed by this module. */
 #define COAP_SOCKET_COUNT (COAP_PORT_COUNT + COAP_SESSION_COUNT)
+
+#define APP_CUSTOM_APN "VZWADMIN"
 
 /**@brief UDP port information. */
 typedef struct {
@@ -188,7 +191,7 @@ static session_t *session_find(const struct sockaddr *local,
  *           indicating reason for failure.
  */
 static coap_transport_handle_t *socket_create_and_bind(u32_t index,
-						       coap_local_t *local)
+						       coap_local_t *local, bool apn)
 {
 	/* Request new socket creation. */
 	const int family = local->addr->sa_family;
@@ -198,6 +201,16 @@ static coap_transport_handle_t *socket_create_and_bind(u32_t index,
 	socklen_t address_len = address_length_get(local->addr);
 
 	if (socket_fd != -1) {
+		if (apn)
+		{
+			struct nrf_ifreq ifr;
+		    memset(&ifr, 0, sizeof(ifr));
+		    memcpy(ifr.ifr_name, APP_CUSTOM_APN, strlen(APP_CUSTOM_APN));
+
+		    int err = nrf_setsockopt(socket_fd, NRF_SOL_SOCKET, NRF_SO_BINDTODEVICE, (void *)&ifr, strlen(APP_CUSTOM_APN));
+		    __ASSERT(err == 0, "Failed to set APN for CoAP socket.");
+		}
+
 		if (local->protocol == IPPROTO_DTLS_1_2) {
 			/* Set the security configuration for the socket. */
 			int err = setsockopt(socket_fd, SOL_TLS, TLS_DTLS_ROLE,
@@ -239,6 +252,7 @@ static coap_transport_handle_t *socket_create_and_bind(u32_t index,
 }
 
 
+
 u32_t coap_transport_init(coap_transport_init_t *param)
 {
 	u32_t index;
@@ -256,7 +270,7 @@ u32_t coap_transport_init(coap_transport_init_t *param)
 
 		/* Create end point for each of the CoAP ports. */
 		transport = socket_create_and_bind(index,
-						   &param->port_table[index]);
+						   &param->port_table[index], false);
 		if (transport == NULL) {
 			return EIO;
 		}
@@ -363,7 +377,7 @@ u32_t coap_security_setup(coap_local_t *local, struct sockaddr const *remote)
 			 */
 			const int port_entry = COAP_PORT_COUNT + index;
 
-			transport = socket_create_and_bind(port_entry, local);
+			transport = socket_create_and_bind(port_entry, local, true);
 
 			if (transport != NULL) {
 				session->local = &port_table[port_entry];
