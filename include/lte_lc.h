@@ -53,4 +53,6 @@ int lte_lc_psm_req(bool enable);
  */
 int lte_lc_edrx_req(bool enable);
 
+int read_emei_and_msisdn(void);
+
 #endif /* ZEPHYR_INCLUDE_LTE_LINK_CONTROL_H_ */

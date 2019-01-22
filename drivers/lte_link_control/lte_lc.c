@@ -207,9 +207,21 @@ static int w_lte_lc_init_and_connect(struct device *unused)
 		}
 	}
 
-	read_msisdn(at_socket_fd);
+	close(at_socket_fd);
+	return 0;
+}
 
-	read_imei(at_socket_fd);
+int read_emei_and_msisdn(void) {
+	int at_socket_fd;
+
+	at_socket_fd = socket(AF_LTE, 0, NPROTO_AT);
+	if (at_socket_fd == -1) {
+		return -EFAULT;
+	}
+
+	(void)read_msisdn(at_socket_fd);
+
+	(void)read_imei(at_socket_fd);
 
 	printk("IMEI: %s\r\n", imei);
 	printk("MSISDN: %s\r\n", msisdn);
