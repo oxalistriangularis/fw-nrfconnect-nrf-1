@@ -1,48 +1,50 @@
 .. _lib_dfu_client:
 
-DFU Client library
-#################
+DFU client
+##########
 
-The DFU client library downloads a firmware for firmware upgrade. The library treats the firmware to be downloaded as an opaque object.
-Therefore, the library can be used to donwload any kind of firmware object or any any target. For example, it could the firmware downloaded could be a delta image, or a full image with many merged hex files. The download is agnostic to firmware revision and firmware download location (flash address etc). The firmware by a resource on a remote server. Therefore, firmware revision management is left to the user application.
+The DFU client library provides functions to download firmware images from a remote server via HTTP.
+The new firmware can then be used for a firmware upgrade.
 
-The module makes no assumption on the size of the firmware to be downloaded. This information is obtained from the server.
-The firmware download is requested from the server in fragments of CONFIG_NRF_DFU_HTTP_MAX_FRAGMENT_SIZE. For example, if the firmware size to be downloaded was 60478 bytes and the CONFIG_NRF_DFU_HTTP_MAX_FRAGMENT_SIZE was configured to be 1024 bytes, then the module will request
-the firmware download at least (assuming no interruptions and failures) 60 times. And all except the last fragment is allowed to be smaller than CONFIG_NRF_DFU_HTTP_MAX_FRAGMENT_SIZE. The DFU_CLIENT_EVT_DOWNLOAD_FRAG is used to notify the application of each notification
+The library does not impose any requirements on the object that is being downloaded, which means that you can use the library for any kind of object, not only firmware images.
+In the case of firmware images, it means that the firmware is treated as an opaque object.
+Therefore, the image can be of any form, for example a delta image or a full image with many merged HEX files, and there is no revision management or specification of the flash address where the image is downloaded.
 
+The size of the object to download is obtained from the server.
+The object is then downloaded in fragments of a maximum fragment size (:option:`CONFIG_NRF_DFU_HTTP_MAX_FRAGMENT_SIZE`).
+For example, if the size of the object to be downloaded is 60478 bytes and the maximum fragment size is 1024 bytes, the module downloads 60 fragments of the object; 59 fragments with a size of 1024 bytes and one fragment with a size of 62 bytes.
+If any of the download requests fail, they can be repeated.
 
-    |<------------- Firmware size ------------------------------------------------->|
-	+---------------+---------------+---------------+---------------+         +---------------+
-	|   Fragment 1  |   Fragment 2  |   Fragment 3  |   Fragment 4  | ....... | Fragment n    |
-	+---------------+---------------+---------------+---------------+		  +---------------+
-                    \                \                                                        \
-                     \                \           ..............................               \
-                      \                \                                                  DFU_CLIENT_EVT_DOWNLOAD_FRAG event,
-                       \                \                                                 fragment length < CONFIG_NRF_DFU_HTTP_MAX_FRAGMENT_SIZE.
-                        \          DFU_CLIENT_EVT_DOWNLOAD_FRAG event,
-                         \         fragment length = CONFIG_NRF_DFU_HTTP_MAX_FRAGMENT_SIZE.
-                          \
-                           \
-                      DFU_CLIENT_EVT_DOWNLOAD_FRAG event,
-                      fragment length = CONFIG_NRF_DFU_HTTP_MAX_FRAGMENT_SIZE.
+After every fragment download, a :cpp:enum:`dfu_client_evt` is returned, indicating if the download was successful (:cpp:member:`DFU_CLIENT_EVT_DOWNLOAD_FRAG`), failed (:cpp:member:`DFU_CLIENT_EVT_ERROR`), or is completed (:cpp:member:`DFU_CLIENT_EVT_DOWNLOAD_DONE`).
 
-For HTTP, the library uses the Range-requests 'Range' header is used to request firmware fragments of size CONFIG_NRF_DFU_HTTP_MAX_FRAGMENT_SIZE. The firmware size is obtained from the the 'Content-Length' header in the response. The 'Connection: keep-alive' header is included in the request to request the server to keep the TCP connection after partial content response. In event the server includes 'Connection: close' the response, the library will reconnect to the server automatically and resume download.
-
-The application must configure CONFIG_NRF_DFU_HTTP_MAX_FRAGMENT_SIZE optimally to its needs since it is notifed a fragment only once the entire fragment is received, with the exception of the last fragment. Too low value will request in too much protocol overhead, while too large will have an imply large RAM requirement.
+Make sure to configure :option:`CONFIG_NRF_DFU_HTTP_MAX_FRAGMENT_SIZE` in a way that suits your application.
+A low value causes many download requests, which can result in too much protocol overhead, while a large value requires a lot of RAM.
 
 
-Assumptions
-***********
-The library currently assumes:
-* address family is IPv4.
-* TCP transport is used for communication with the server.
-* the application protocol to communicate to the server to be HTTP 1.1.
-* IETF RFC 7233 is assumed to be supported by the HTTP Server.
-* the library requires the CONFIG_NRF_DFU_HTTP_MAX_FRAGMENT_SIZE to be configured to contain the entire HTTP response.
+Protocols
+*********
 
-Limitations
-***********
-* HTTPS is not supported.
+The download protocol is determined from the download URI.
+Currently, only HTTP is supported.
+
+HTTP
+====
+
+For HTTP, the following requirements must be met:
+
+* The address family is IPv4.
+* TCP transport is used to communicate with the server.
+* The application protocol to communicate with the server is HTTP 1.1.
+* IETF RFC 7233 is supported by the HTTP Server.
+* :option:`CONFIG_NRF_DFU_HTTP_MAX_FRAGMENT_SIZE` is configured so that it can contain the entire HTTP response.
+
+HTTPS is not supported.
+
+The library uses the "Range" header to request firmware fragments of size :option:`CONFIG_NRF_DFU_HTTP_MAX_FRAGMENT_SIZE`.
+The firmware size is obtained from the "Content-Length" header in the response.
+To request the server to keep the TCP connection after a partial content response, the "Connection: keep-alive" header is included in the request.
+If the server response contains "Connection: close", the library automatically reconnects to the server and resumes the download.
+
 
 API documentation
 *****************
