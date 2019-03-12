@@ -42,7 +42,11 @@ enum dfu_client_status {
 	 *  application. This status indicates that the application
 	 *  identified a failure when handling the
 	 *  @ref DFU_CLIENT_EVT_DOWNLOAD_FRAG event. */
-	DFU_CLIENT_STATUS_HALTED = 0x04
+	DFU_CLIENT_STATUS_HALTED = 0x04,
+	/** Indicates that an error occured and the download
+	 *  cannot continue.
+	 */
+	DFU_CLIENT_ERROR = 0xFF
 };
 
 
@@ -83,11 +87,20 @@ typedef int (*dfu_client_event_handler_t)(struct dfu_client_object *dfu, enum df
 
 /** @brief Firmware download object that describes the state of download. */
 struct dfu_client_object {
+	/** Buffer used to receive responses from the server.
+	 *  This buffer can be read by the application if need be, never written to. */
 	char resp_buf[CONFIG_NRF_DFU_HTTP_MAX_RESPONSE_SIZE];
+	/** Buffer used to cerate requests to the server.
+	 *  This buffer can be read by the application if need be, never written to. */
 	char req_buf[CONFIG_NRF_DFU_HTTP_MAX_REQUEST_SIZE];
+	/** Pointer to firmware fragment in the resp_buf.
+	 *  The response from the server contains protocol meta-data apart from the firmware ragment.
+	 *  The module on every DFU_CLIENT_EVT_DOWNLOAD_FRAG points to the firmware fragment.
+	 *  This pointer should not be updated by the application.
+	 */
 	char *fragment;
+	/** Size of the fragment, is updated on every DFU_CLIENT_EVT_DOWNLOAD_FRAG event. */
 	int fragment_size;
-
 	/** Transport file descriptor.
 	 *  If negative, the transport is disconnected. */
 	int fd;
